@@ -1,0 +1,98 @@
+1 запрос
+
+Выбрать фамилии,имена,дату рождения,названия стран ,для сборных в которых состоят спортменки и количество наиболее престижных титулов всех спортсменок. Сгруппировать по s.id,t.id и отсортировать по убыванию количества титулов у каждой спортсменки.
+
+
+
+SELECT s.last_name,s.name,s.date_of_birth,t.name_of_country, count(tos.id) AS number_of_prestigious_titles FROM main_titles AS mt INNER JOIN titles_of_sportsmen AS tos ON (tos.title_id=mt.id AND mt.level_of_prestige>=6) RIGHT JOIN sportsmen AS s ON (s.id=tos.sportsman_id ) LEFT JOIN teams AS t ON (s.team_id=t.id)  GROUP BY s.id,t.id ORDER BY number_of_prestigious_titles DESC;
+
+
+
+Необходимость: Информация очень актуальна для комментаторов или спортивных журналистов, так как им всегда необходимо иметь перед глазами данные обо всех участвующих спортсменках и сборных(=странах),в которых они состоят,но при этом знать у кого больше шансов на победу или кто только начинает соревноваться ,чтобы донести эту информацию до зрителей. Также данные рейтигни именно в таком виде часто публикуются в журналах и появляются в статьях,так как легко видеть наиболее успешных спортсменок и сборные, в которых они состоят.Использование RIGHT JOIN для соединения с таблицей sportsmen  объясняется тем, что в моей БД возможно существлвание спортсменок без титулов ,например, если спортсменка перешла с юниорского уровня и заявлена в составе сборной на свои первые взрослые соревнования ,соответственно ,у неё пока нет титулов. (если же использовать inner join  данные спортсменки не будут отражаться в результате, а если использовать where mt.level_of_prestige>=6, то в результате мы не получим данные о спортсменках ,у которых количество таких титулов равно 0). Использование LEFT JOIN для соединения   с таблицей   teams объясняется тем что, необходимо сохранить данные о спортсменках,у которых нет титулов (то есть значения NULL),но в данном запросе нам не требуются данные о командах, в которых нет ни одной спортсменки ( то есть нужны только ненулевые значения из таблицы teams).
+
+
+Оптимизация:Используется созданный ранее на этапе создания таблиц (ALTER TABLE ONLY main_titles ADD CONSTRAINT main_titles_pkey PRIMARY KEY (id);) первичный ключ main_titles_pkey on main_titles и ранее созданный на этапе создания таблиц (ALTER TABLE ONLY titles_of_sportsmen ADD CONSTRAINT titles_of_sportsmen_sportsman_id_title_id_key UNIQUE (sportsman_id, title_id);) уникальный ключ titles_of_sportsmen_sportsman_id_title_id_key on titles_of_sportsmen  для соединения (INNER JOIN) таблиц main_titles и titles_of_sportsmen. Также используется созданный ранее на этапе создания таблиц (ALTER TABLE ONLY sportsmen
+ADD CONSTRAINT sportsmen_pkey PRIMARY KEY (id);) первичный ключ sportsmen_pkey on sportsmen для соединения (RIGHT JOIN) таблиц 
+sportsmen и titles_of_sportsmen.
+
+
+2 запрос
+
+Выбрать названия всех стран,количество в этих странах спортсменок  и среднее количество специализаций спортсменок  в каждой из этих сборных (=стран). Сгруппировать по sa.name_of_country. Отсортировать по убыванию среднего количества специализаций спортсменок и по убыванию количества спортсменок в этих странах.
+
+
+WITH specialization_avg AS ( SELECT s.id AS sportsmen_id,t.id,t.name_of_country,count(ss.type_of_exercise_id) AS amount_of_exercises_for_sportsman FROM sportsmen AS s LEFT JOIN specialization_sportsmen AS ss ON (s.id=ss.sportsman_id) LEFT JOIN types_of_exercises AS toe ON (ss.type_of_exercise_id=toe.id) FULL OUTER JOIN teams AS t ON (s.team_id=t.id) GROUP BY s.id,t.id ) SELECT sa.name_of_country,count(sa.sportsmen_id) AS amount_of_members,avg(amount_of_exercises_for_sportsman) AS amount_of_exercises_for_team FROM specialization_avg AS sa GROUP BY sa.name_of_country  ORDER BY amount_of_exercises_for_team DESC,amount_of_members DESC;
+
+
+Необходимость:Информация о среднем количестве специализаций для сборной и о количество в этих странах спортсменок актуальна для старших тренеров и спортивных чиновников,так как они могут отследить результативность работы  младших тренеров.  То есть среднее количество специализаций у сборной и количество в ней спортсменок показывает насколько  тренеры стремятся развивать  каждую спортсменку во всех возможных видах упражнений, а не тренируют только однонаправленных спортсменок (то есть тех,кто может выступать только на 1 снаряде), так как такие спортменки ослабляют сборную и при травмировании другого члена команды не могут её заменить в полной мере ( однонаправленность спортменок-это плохая, но частая тенденция в современной гимнастике) ,поэтому чем больше среднее число специализаций в сборной (максимум=6) тем лучшую работу выполняют тренеры,но при этом важно учитывать данные и о количестве спортсменок в данных сборных, так как среднее количество специализаций для двух команд может совпадать ,но при этом в одной из этих команд всего одна спортсменка ,а в другой их гораздно больше, и соответсвенно работа тренеров заметно отличается ,поэтому чтобы выводы о работе тренеров в сборной были более правильными нужно учитывать одновременно и среднее количество специализаций спортсменок в сборной ,и количество спортсменок в этой сборной.Также нам требуется выводить данные о странах с нулевой средней специализацией, то есть спортивные чиновники и тренеры должны обратить внимание , что нужно привлекать больше спортсменок в сборную.
+
+Использование LEFT JOIN для соединения таблиц sportsmen и specialization_sportsmen  объясняется тем что, нам  нужно  сохранить данные о спортсменках,у которых нет специализации (то есть значения NULL),так как данные спортсменки всё равно остаются в составе сборной и их нужно отражать в данных о количестве спортсменок в сборных. Использование FULL OUTER JOIN для соединения   с таблицей   teams объясняется тем что, необходимо сохранить данные о командах, в которых нет ни одной спортсменки , так как среднее количество специализаций спортсменок в данных командах будет 0 и в запросе подразумевается необходимость данной информации.
+
+
+
+
+Оптимизация:Используется созданный ранее на этапе создания таблиц (ALTER TABLE ONLY sportsmen
+ADD CONSTRAINT sportsmen_pkey PRIMARY KEY (id);) первичный ключ sportsmen_pkey on sportsmen и ранее созданный на этапе создания таблиц (ALTER TABLE ONLY specialization_sportsmen ADD CONSTRAINT specialization_sportsmen_sportsman_id_type_of_exercise_id_key UNIQUE (sportsman_id, type_of_exercise_id); ) уникальный ключ specialization_sportsmen_sportsman_id_type_of_exercise_id_key on specialization_sportsmen для соединения (LEFT JOIN) таблиц sportsmen и specialization_sportsmen, и далее используется созданный на этапе создания таблиц(ALTER TABLE ONLY teams ADD CONSTRAINT teams_pkey PRIMARY KEY (id);)  первичный ключ teams_pkey on teams для соединения (FULL OUTER JOIN) таблиц sportsmen и teams.
+
+
+
+
+
+
+3 запрос
+
+
+
+
+WITH sportsman_avg AS (SELECT s.id,s.last_name,s.name,s.number_base_FSI,s.team_id,avg(mt.level_of_prestige) AS sportsman_avg_prestige FROM sportsmen AS s LEFT JOIN titles_of_sportsmen AS tos ON (s.id=tos.sportsman_id) LEFT JOIN main_titles AS mt ON (tos.title_id=mt.id)  GROUP BY s.id ORDER BY sportsman_avg_prestige DESC), team_avg AS ( SELECT sa.team_id,t.name_of_country,max(sa.sportsman_avg_prestige) AS team_max_avg FROM sportsman_avg AS sa LEFT JOIN teams AS t ON (sa.team_id=t.id) GROUP BY sa.team_id,t.id) SELECT ta.name_of_country,sa.last_name,sa.name,sa.number_base_FSI FROM sportsman_avg AS sa LEFT JOIN team_avg AS ta ON (sa.team_id=ta.team_id) WHERE  sa.sportsman_avg_prestige=ta.team_max_avg ORDER BY ta.name_of_country;
+
+
+
+
+
+
+SELECT s.last_name,s.name,s.date_of_birth,t.name_of_country, count(tos.id)  AS number_of_prestigious_titles ,(count(tos.title_id) OVER (PARTITION BY t.id)) AS gg FROM main_titles AS mt INNER JOIN titles_of_sportsmen AS tos ON (tos.title_id=mt.id AND mt.level_of_prestige>=6) RIGHT JOIN sportsmen AS s ON (s.id=tos.sportsman_id ) LEFT JOIN teams AS t ON (s.team_id=t.id) GROUP BY s.id,t.id ORDER BY number_of_prestigious_titles DESC;
+
+
+
+
+
+
+
+
+
+
+
+2pfghjc-----------WITH specialization_avg AS ( SELECT s.id AS sportsmen_id,t.id,t.name_of_country,count(ss.type_of_exercise_id) AS amount_of_exercises_for_sportsman FROM types_of_exercises AS toe INNER JOIN  specialization_sportsmen AS ss ON(toe.id=ss.type_of_exercise_id)  RIGHT JOIN sportsmen AS s ON (ss.sportsman_id=s.id) FULL OUTER JOIN teams AS t ON (s.team_id=t.id) GROUP BY s.id,t.id ) SELECT sa.name_of_country,count(sa.sportsmen_id) AS amount_of_members,avg(amount_of_exercises_for_sportsman) AS amount_of_exercises_for_team FROM specialization_avg AS sa GROUP BY sa.name_of_country  ORDER BY amount_of_exercises_for_team DESC,amount_of_members DESC;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+SELECT s.last_name,s.name,s.date_of_birth,mt.name FROM sportsmen AS s  INNER JOIN titles_of_sportsmen AS tos ON (s.id=tos.sportsman_id) INNER JOIN main_titles AS mt ON (tos.title_id=mt.id) WHERE mt.title_duration <=4 GROUP BY s.id,mt.name;
+
+WITH sportsmen_titles AS (SELECT s.last_name,s.name,s.date_of_birth,mt.name FROM sportsmen AS s  INNER JOIN titles_of_sportsmen AS tos ON (s.id=tos.sportsman_id) INNER JOIN main_titles AS mt ON (tos.title_id=mt.id) GROUP BY s.id )SELECT max(level_of_prestige),avg(level_of_prestige) FROM sportsmen_titles AS st GROUP BY st.id;
+
+
+WITH  sportsmen_titles AS (SELECT s.id,s.team_id,avg(mt.level_of_prestige) AS ggg FROM main_titles AS mt INNER JOIN titles_of_sportsmen AS tos ON (tos.title_id=mt.id ) RIGHT JOIN sportsmen AS s ON (s.id=tos.sportsman_id ) GROUP BY s.id ORDER BY avg(mt.level_of_prestige) DESC) SELECT st.team_id,st.avg(ggg) FROM sportsmen_titles AS st GROUP BY st.team_id;
+
+
+SELECT s.team_id,avg(mt.level_of_prestige) FROM main_titles AS mt INNER JOIN titles_of_sportsmen AS tos ON (tos.title_id=mt.id ) RIGHT JOIN sportsmen AS s ON (s.id=tos.sportsman_id ) GROUP BY s.team_id ORDER BY avg(mt.level_of_prestige) DESC;
+
+
+
+////SELECT s.last_name,s.name,s.date_of_birth, count(mt.id) AS number_of_prestigious_titles FROM sportsmen AS s LEFT JOIN titles_of_sportsmen AS tos ON (s.id=tos.sportsman_id ) LEFT JOIN main_titles AS mt ON (tos.title_id=mt.id AND mt.level_of_prestige>=6) GROUP BY s.id ORDER BY number_of_prestigious_titles DESC;///
+
+ЭТОТ ЛУЧШЕ/////SELECT s.last_name,s.name,s.date_of_birth, count(tos.id) AS number_of_prestigious_titles FROM main_titles AS mt INNER JOIN titles_of_sportsmen AS tos ON (tos.title_id=mt.id AND mt.level_of_prestige>=6) RIGHT JOIN sportsmen AS s ON (s.id=tos.sportsman_id )  GROUP BY s.id ORDER BY number_of_prestigious_titles DESC; 
+
+
